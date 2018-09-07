@@ -25,7 +25,6 @@ def run(double=False):
     buffer = ExperienceBuffer(params["replay_size"])
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(net.parameters(), params["learning_rate"])
-    total_rewards = []
     frame_idx = 0
 
     while True:
@@ -60,11 +59,10 @@ def run(double=False):
                 target_net.load_state_dict(net.state_dict())
 
             s = s__
-        total_rewards.append(episode_reward)
-        mean_reward = np.mean(total_rewards[-100:])
-        logger(writer, frame_idx, epsilon, episode_reward, mean_reward)
 
-        if mean_reward > params["stop_reward"]:
+        logger(writer, frame_idx, episode_reward)
+
+        if episode_reward > params["stop_reward"]:
             print("Solved in %d frames!" % frame_idx)
             torch.save(net.state_dict(), "best_weights.pkl")
             break

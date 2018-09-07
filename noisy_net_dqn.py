@@ -58,7 +58,6 @@ def run(double=False):
     buffer = ExperienceBuffer(params["replay_size"])
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(net.parameters(), params["learning_rate"])
-    total_rewards = []
     frame_idx = 0
 
     while True:
@@ -81,9 +80,8 @@ def run(double=False):
             s = s_
             if done:
                 break
-        total_rewards.append(episode_reward)
-        mean_reward = np.mean(total_rewards[-100:])
-        logger(writer, frame_idx, episode_reward, mean_reward)
+
+        logger(writer, frame_idx, episode_reward)
 
         if episode_reward > params["stop_reward"]:
             print("Solved in %d frames!" % frame_idx)
