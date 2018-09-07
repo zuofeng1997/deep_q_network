@@ -52,9 +52,9 @@ def run(double=False):
     Experience = collections.namedtuple("Experience", field_names=["state", 'action', 'reward', 'done', 'new_state'])
     params = HYPERPARAMS["pong"]
     env = wrappers.make_env(params["env_name"])
-    net = dqn_model.DQN(env.observation_space.shape, env.action_space.n).to(device)
-    target_net = dqn_model.DQN(env.observation_space.shape, env.action_space.n).to(device)
-    writer = SummaryWriter(comment="basic_dqn")
+    net = NoisyDQN(env.observation_space.shape, env.action_space.n).to(device)
+    target_net = NoisyDQN(env.observation_space.shape, env.action_space.n).to(device)
+    writer = SummaryWriter(comment="noisy_net_dqn")
     buffer = ExperienceBuffer(params["replay_size"])
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(net.parameters(), params["learning_rate"])
@@ -82,7 +82,8 @@ def run(double=False):
             if done:
                 break
         total_rewards.append(episode_reward)
-        logger(writer, frame_idx, episode_reward)
+        mean_reward = np.mean(total_rewards[-100:])
+        logger(writer, frame_idx, episode_reward, mean_reward)
 
         if episode_reward > params["stop_reward"]:
             print("Solved in %d frames!" % frame_idx)
