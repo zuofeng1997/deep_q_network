@@ -51,9 +51,9 @@ class NoisyFactorizedLinear(nn.Linear):
 
 
 class DQN(nn.Module):
-    def __init__(self, input_shape, n_actions):
+    def __init__(self, input_shape, n_actions, duleing=False):
         super(DQN, self).__init__()
-
+        self.dueling = duleing
         self.conv = nn.Sequential(
             nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),
             nn.ReLU(),
@@ -64,12 +64,23 @@ class DQN(nn.Module):
         )
 
         conv_out_size = self._get_conv_out(input_shape)
-
-        self.fc = nn.Sequential(
-            nn.Linear(conv_out_size, 512),
-            nn.ReLU(),
-            nn.Linear(512, n_actions)
+        if self.duleing:
+            self.fc_val = nn.Sequential(
+                nn.Linear(conv_out_size, 512),
+                nn.ReLU(),
+                nn.Linear(512, 1)
         )
+            self.fc_adv = self.fc = nn.Sequential(
+                nn.Linear(conv_out_size, 512),
+                nn.ReLU(),
+                nn.Linear(512, n_actions)
+        )
+        else:
+            self.fc = nn.Sequential(
+                nn.Linear(conv_out_size, 512),
+                nn.ReLU(),
+                nn.Linear(512, n_actions)
+            )
 
     def _get_conv_out(self, shape):
         test_tensor = self.conv(torch.zeros(1, *shape))
@@ -77,4 +88,9 @@ class DQN(nn.Module):
 
     def forward(self, x):
         conv_out = self.conv(x).view(x.size()[0], -1)
-        return self.fc(conv_out)
+        if self.dueling:
+            val = self.fc_val(conv_out)
+            adv = self.fc_adv(conv_out)
+            return val + adv - adv.mean()
+        else:
+            return self.fc(conv_out)

@@ -6,7 +6,7 @@ HYPERPARAMS = {
     'pong': {
         'env_name':         "PongNoFrameskip-v4",
         'stop_reward':      18.0,
-        'replay_size':      10000,
+        'replay_size':      100000,
         'replay_start_size':   10000,
         'target_net_sync':  1000,
         'epsilon_frames':   10**5,
@@ -81,10 +81,9 @@ def learn(loss_fn, optimizer, batch, params, net, target_net, double=False, use_
     optimizer.step()
 
 
-def logger(writer, frame_idx, reward, mean_reward):
+def logger(writer, frame_idx, reward):
     writer.add_scalar("reward", reward, frame_idx)
-    writer.add_scalar("mean_reward", mean_reward, frame_idx)
-    print("frames: %d, mean_reward: %.3f" % (frame_idx, mean_reward))
+    print("frames: %d, reward: %.3f" % (frame_idx, reward))
 
 
 def calc_mean_val(batch, net, use_cuda):
