@@ -81,14 +81,12 @@ def learn(loss_fn, optimizer, batch, params, net, target_net, double=False, use_
     optimizer.step()
 
 
-def logger(writer, frame_idx, eps, reward, mean_reward):
-    writer.add_scalar("epsilon", eps, frame_idx)
+def logger(writer, frame_idx, reward):
     writer.add_scalar("reward", reward, frame_idx)
-    writer.add_scalar("mean_reward", mean_reward, frame_idx)
-    print("frames: %d, mean_reward: %.3f" % (frame_idx, mean_reward))
+    print("frames: %d, reward: %.3f" % (frame_idx, reward))
 
 
-def calc_mean_val(batch, net, use_cuda):
+def calc_mean_val(batch, net, use_cuda):    
     if not batch:
         return 0
     if use_cuda:
