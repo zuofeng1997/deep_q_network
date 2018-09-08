@@ -48,7 +48,7 @@ def run(double=False, prio=False):
                 batch, indices, weights = buffer.sample(params["batch_size"], beta=beta)
                 loss_ind = learn(loss_fn, optimizer, batch, params, net, target_net, use_cuda=args.cuda, double=double,
                                  prio=prio, batch_w=weights)
-                buffer.update_priorites(indices, loss_ind)
+                buffer.update_priorites(indices, loss_ind.data.cpu().numpy())
             if frame_idx % params["target_net_sync"] == 0:
                 target_net.load_state_dict(net.state_dict())
             s = s_
