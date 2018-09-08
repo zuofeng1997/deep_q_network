@@ -51,9 +51,9 @@ class NoisyFactorizedLinear(nn.Linear):
 
 
 class DQN(nn.Module):
-    def __init__(self, input_shape, n_actions, duleing=False):
+    def __init__(self, input_shape, n_actions, dueling=False):
         super(DQN, self).__init__()
-        self.dueling = duleing
+        self.dueling = dueling
         self.conv = nn.Sequential(
             nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),
             nn.ReLU(),
@@ -64,7 +64,7 @@ class DQN(nn.Module):
         )
 
         conv_out_size = self._get_conv_out(input_shape)
-        if self.duleing:
+        if self.dueling:
             self.fc_val = nn.Sequential(
                 nn.Linear(conv_out_size, 512),
                 nn.ReLU(),

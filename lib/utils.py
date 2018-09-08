@@ -21,6 +21,46 @@ HYPERPARAMS = {
 }
 
 
+class PrioReplayBuffer:
+    def __init__(self, buf_size, prob_alpha):
+        self.capacity = buf_size
+        self.prob_alpha = prob_alpha
+        self.pos = 0
+        self.buffer = []
+        self.priorities = np.zeros((buf_size, ), dtype=np.float32)
+
+    def __len__(self):
+        return len(self.buffer)
+
+    def populate(self, exp):
+        max_prio = self.priorities.max() if self.buffer else 1.0
+        if len(self.buffer) < self.capacity:
+            self.buffer.append(exp)
+        else:
+            self.buffer[self.pos] = exp
+        self.priorities[self.pos] = max_prio
+        self.pos = (self.pos + 1) % self.capacity
+
+    def sample(self, batch_size, beta):
+        if len(self.buffer) == self.capacity:
+            prios = self.priorities
+        else:
+            prios = self.priorities[:self.pos]
+        prios = prios ** self.prob_alpha
+        prios /= prios.sum()
+        indices = np.random.choice(len(self.buffer), batch_size, p=prios)
+        states, actions, rewards, dones, next_states = zip(*[self.buffer[idx] for idx in indices])
+        total = len(self.buffer)
+        weights = (total * prios[indices]) ** (-beta)
+        weights /= weights.max()
+        return (np.array(states), np.array(actions), np.array(rewards), np.array(dones, dtype=np.uint8),\
+               np.array(next_states)), indices, np.array(weights, dtype=np.float32)
+
+    def update_priorites(self, batch_indices, batch_priorites):
+        for idx, prio in zip(batch_indices, batch_priorites):
+            self.priorities[idx] = prio
+
+
 class ExperienceBuffer:
     def __init__(self, capacity):
         self.buffer = collections.deque(maxlen=capacity)
@@ -54,12 +94,15 @@ def choose_action(env, state, net, epsilon=0.0, use_cuda=True):
     return action
 
 
-def learn(loss_fn, optimizer, batch, params, net, target_net, double=False, use_cuda=True):
+def learn(loss_fn, optimizer, batch, params, net, target_net, double=False, use_cuda=True, prio=False, batch_w=None, two_steps=False):
     if use_cuda:
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
-
+    if two_steps:
+        gamma = params["gamma"]
+    else:
+        gamma = params["gamma"] * params["gamma"]
     states, actions, rewards, dones, next_states = batch
     states = torch.tensor(states, dtype=torch.float, device=device)
     actions = torch.tensor(actions, dtype=torch.long, device=device)
@@ -75,10 +118,22 @@ def learn(loss_fn, optimizer, batch, params, net, target_net, double=False, use_
         next_state_values = target_net(next_states).max(1)[0]
     next_state_values[dones] = 0.0
     next_state_values = next_state_values.detach()
-    loss = loss_fn(state_action_values, rewards + params["gamma"] * params["gamma"] * next_state_values)
     optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
+    if prio:
+        batch_w = torch.tensor(batch_w).to(device)
+        loss_ind = batch_w*(state_action_values-rewards + gamma * next_state_values)**2
+        loss = loss_ind.mean()
+        loss.backward()
+        optimizer.step()
+        return loss_ind
+    else:
+        loss = loss_fn(state_action_values, rewards + gamma * next_state_values)
+        loss.backward()
+        optimizer.step()
+
+
+
+
 
 
 def logger(writer, frame_idx, reward):
