@@ -130,7 +130,7 @@ def learn(loss_fn, optimizer, batch, params, net, target_net, double=False, use_
         loss = loss_ind.mean()
         loss.backward()
         optimizer.step()
-        return loss_ind
+        return loss_ind+1e-5
     else:
         loss = loss_fn(state_action_values, rewards + gamma * next_state_values)
         loss.backward()
@@ -152,7 +152,7 @@ def learn_dist(optimizer, batch, params, net, target_net, use_cuda=True):
     state_action_values = distr_v[range(batch_size), actions]
     state_log_sm_v = F.log_softmax(state_action_values, dim=1)
 
-    
+
     next_distr_v, next_qvals_v = target_net.both(next_states)
     next_actions = next_qvals_v.max(1)[1].data.cpu().numpy()
     next_distr = target_net.apply_softmax(next_distr_v).data.cpu().numpy()
@@ -166,6 +166,46 @@ def learn_dist(optimizer, batch, params, net, target_net, use_cuda=True):
     optimizer.zero_grad()
     loss_v.backward()
     optimizer.step()
+
+
+def learn_rainbow(optimizer, batch, params, net, target_net, batch_w, use_cuda=True):
+    if use_cuda:
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+    gamma = params["gamma"] * params["gamma"]
+
+    states, actions, rewards, dones, next_states = batch
+    batch_size = len(states)
+    states = torch.tensor(states, dtype=torch.float, device=device)
+    actions = torch.tensor(actions, dtype=torch.long, device=device)
+    next_states = torch.tensor(next_states, dtype=torch.float, device=device)
+    batch_w = torch.tensor(batch_w, device=device)
+
+    distr_v, qvals_v = net.both(torch.cat((states, next_states)))
+    next_qvals_v = qvals_v[batch_size:]
+    distr_v = distr_v[:batch_size]
+
+    next_actions_v = next_qvals_v.max(1)[1]
+    next_distr_v = target_net(next_states)
+    next_best_distr_v = next_distr_v[range(batch_size), next_actions_v.data]
+    next_best_distr_v = target_net.apply_softmax(next_best_distr_v)
+    next_best_distr = next_best_distr_v.data.cpu().numpy()
+    dones = dones.astype(np.bool)
+    proj_distr = distr_projection(next_best_distr, rewards, dones, params['Vmin'], params['Vmax'], params['N_ATOMS'],
+                                  gamma)
+
+    state_action_values = distr_v[range(batch_size), actions]
+    state_log_sm_v = F.log_softmax(state_action_values, dim=1)
+
+    proj_distr_v = torch.tensor(proj_distr).to(device)
+    loss_v_ind = -state_log_sm_v * proj_distr_v
+    loss_v = batch_w * loss_v_ind.sum(dim=1)
+
+    optimizer.zero_grad()
+    loss_v.mean().backward()
+    optimizer.step()
+    return loss_v+1e-5
 
 
 def logger(writer, frame_idx, reward):
@@ -198,6 +238,8 @@ def distr_projection(next_distr, rewards, dones, Vmin, Vmax, n_atoms, gamma):
         tz_j = np.minimum(Vmax, np.maximum(Vmin, rewards + (Vmin + atom * delta_z) * gamma))
         b_j = (tz_j - Vmin) / delta_z
         l = np.floor(b_j).astype(np.int64)
+
+
         u = np.ceil(b_j).astype(np.int64)
         eq_mask = u == l
         proj_distr[eq_mask, l[eq_mask]] += next_distr[eq_mask, atom]
